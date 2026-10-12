@@ -25,7 +25,7 @@
    | 名称 | 类型 | 值 |
    |---|---|---|
    | `RULES` | KV 绑定 | 第 1 步的命名空间 |
-   | `PAGES_PROJECT` | 变量 | Pages 项目名（决定后台地址 `<项目名>.pages.dev`） |
+   | `PAGES_PROJECT` | 变量 | Pages 项目名（后台调 API 用；后台地址固定是本项目的 `*.pages.dev`） |
    | `CF_ACCOUNT_ID` | 变量 | 本账号 ID |
    | `CF_API_TOKEN` | 密钥 | API Token，权限：账户 → Cloudflare Pages → 编辑 |
    | `ACCESS_TEAM_DOMAIN` | 变量 | Zero Trust 团队域名，如 `myteam.cloudflareaccess.com` |

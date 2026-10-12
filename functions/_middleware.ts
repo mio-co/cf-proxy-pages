@@ -5,12 +5,10 @@ import { proxy } from './_lib/proxy';
 
 function adminHostMatcher(env: Env) {
   const extra = (env.ADMIN_HOSTS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
-  const project = env.PAGES_PROJECT?.toLowerCase();
   return (h: string) => {
     h = h.toLowerCase();
-    if (h === 'localhost' || h === '127.0.0.1' || extra.includes(h)) return true;
-    // 生产地址 <project>.pages.dev 与预览地址 <hash>.<project>.pages.dev；未配置项目名时任何 pages.dev 都当后台
-    return project ? h === `${project}.pages.dev` || h.endsWith(`.${project}.pages.dev`) : h.endsWith('.pages.dev');
+    // 任何 *.pages.dev（生产地址与预览地址）都是后台：接入的自定义域名不可能是 pages.dev，不再依赖 PAGES_PROJECT 填对
+    return h === 'localhost' || h === '127.0.0.1' || extra.includes(h) || h.endsWith('.pages.dev');
   };
 }
 
