@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>反代后台</title>
+<style>
+  :root { --bg:#0f1115; --card:#171a21; --line:#272b35; --fg:#e6e8ee; --mut:#8b93a7; --acc:#f6821f; --ok:#3ecf8e; --bad:#ff5d5d; --warn:#f5c04a; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.5 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; }
+  header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 24px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  h1 { font-size:18px; margin:0; } h1 b { color:var(--acc); }
+  .mut { color:var(--mut); font-size:12px; }
+  main { max-width:1200px; margin:0 auto; padding:20px 24px 60px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  input[type=text] { background:#0c0e12; border:1px solid var(--line); color:var(--fg); border-radius:6px; padding:7px 9px; font:inherit; min-width:0; }
+  input[type=text]:focus { outline:none; border-color:var(--acc); }
+  button { background:#232835; color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:7px 12px; font:inherit; cursor:pointer; white-space:nowrap; }
+  button:hover { border-color:var(--mut); } button.pri { background:var(--acc); border-color:var(--acc); color:#111; font-weight:600; }
+  button.danger:hover { border-color:var(--bad); color:var(--bad); } button:disabled { opacity:.5; cursor:default; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:10px 8px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  th { color:var(--mut); font-weight:500; font-size:12px; }
+  td.host { font-family:ui-monospace,Menlo,monospace; word-break:break-all; }
+  td input.t { width:100%; min-width:220px; } td input.n { width:100%; min-width:100px; }
+  .pill { display:inline-block; padding:1px 8px; border-radius:99px; font-size:12px; border:1px solid var(--line); }
+  .pill.ok { color:var(--ok); border-color:#1f5b44; } .pill.bad { color:var(--bad); border-color:#6b2a2a; } .pill.warn { color:var(--warn); border-color:#6b5a22; }
+  .acts { display:flex; gap:6px; flex-wrap:wrap; }
+  #msg { position:fixed; right:20px; bottom:20px; max-width:420px; padding:10px 14px; border-radius:8px; background:#222836; border:1px solid var(--line); display:none; }
+  #msg.err { border-color:var(--bad); } #msg.ok { border-color:var(--ok); }
+  code { background:#0c0e12; padding:1px 6px; border-radius:4px; font-size:12px; }
+  label.sw { display:inline-flex; align-items:center; gap:4px; font-size:12px; color:var(--mut); cursor:pointer; }
+  @media (max-width: 860px) { thead { display:none; } tr { display:block; border-bottom:1px solid var(--line); padding:8px 0; } td { display:block; border:0; padding:4px 0; } }
+</style>
+</head>
+<body>
+<header>
+  <div><h1><b>CF</b> 反代后台</h1><div class="mut" id="who">加载中…</div></div>
+  <button id="reload">刷新</button>
+</header>
+<main>
+  <div class="card">
+    <div class="row" style="margin-bottom:8px"><strong>接入新域名</strong></div>
+    <div class="row">
+      <input type="text" id="nh" placeholder="接入域名，如 api.example.com" style="flex:1 1 220px" />
+      <input type="text" id="nt" placeholder="目标 Worker，如 https://name.sub.workers.dev" style="flex:2 1 300px" />
+      <button class="pri" id="add">添加</button>
+    </div>
+    <p class="mut" id="hint" style="margin:10px 0 0"></p>
+  </div>
+  <div class="card" style="padding:0 16px">
+    <table>
+      <thead><tr><th>域名</th><th>Pages 绑定</th><th>目标 Worker</th><th>备注</th><th>选项</th><th>操作</th></tr></thead>
+      <tbody id="list"><tr><td colspan="6" class="mut">加载中…</td></tr></tbody>
+    </table>
+  </div>
+</main>
+<div id="msg"></div>
+<script>
+const $ = (id) => document.getElementById(id);
+let ME = {};
+function toast(text, ok) { const m = $('msg'); m.textContent = text; m.className = ok ? 'ok' : 'err'; m.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => (m.style.display = 'none'), 4000); }
+async function api(path, opt = {}) {
+  const r = await fetch('/api/' + path, { ...opt, headers: { 'content-type': 'application/json' }, credentials: 'same-origin' });
+  const d = await r.json().catch(() => ({ error: 'HTTP ' + r.status }));
+  if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+  return d;
+}
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+function domainPill(d) {
+  if (!ME.cfApi) return '<span class="mut">未配置 API</span>';
+  if (!d) return '<span class="pill bad">未绑定</span>';
+  const s = d.status;
+  const cls = s === 'active' ? 'ok' : (s === 'pending' || s === 'initializing') ? 'warn' : 'bad';
+  const err = d.verification_data?.error_message || d.validation_data?.error_message || '';
+  return `<span class="pill ${cls}" title="${esc(err)}">${esc(s)}</span>`;
+}
+function row(it) {
+  const r = it.rule || {};
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td class="host">${esc(it.host)}</td>
+    <td>${domainPill(it.domain)}</td>
+    <td><input type="text" class="t" value="${esc(r.target)}" placeholder="https://name.sub.workers.dev" /></td>
+    <td><input type="text" class="n" value="${esc(r.note)}" placeholder="备注" /></td>
+    <td><label class="sw"><input type="checkbox" class="en" ${it.rule ? (r.enabled ? 'checked' : '') : 'checked'} />启用</label><br/>
+        <label class="sw" title="把上游 Set-Cookie 里的目标域名改成接入域名"><input type="checkbox" class="ck" ${r.rewriteCookies ? 'checked' : ''} />改写 Cookie</label></td>
+    <td class="acts">
+      <button class="pri sv">保存</button><button class="ts">测试</button>
+      ${it.rule ? '<button class="danger dr">删规则</button>' : ''}
+      ${ME.cfApi && it.domain ? '<button class="danger dd">解绑域名</button>' : ''}
+      ${ME.cfApi && !it.domain ? '<button class="bd">绑定到 Pages</button>' : ''}
+    </td>`;
+  const q = (s) => tr.querySelector(s);
+  q('.sv').onclick = () => run(async () => {
+    await api('rules/' + encodeURIComponent(it.host), { method: 'PUT', body: JSON.stringify({ target: q('.t').value, note: q('.n').value, enabled: q('.en').checked, rewriteCookies: q('.ck').checked }) });
+    toast('已保存，约 1 分钟内全球生效', true); load();
+  });
+  q('.ts').onclick = () => run(async () => { const d = await api('test', { method: 'POST', body: JSON.stringify({ target: q('.t').value }) }); toast(`目标返回 HTTP ${d.status}，耗时 ${d.ms} ms`, d.status < 500); });
+  if (q('.dr')) q('.dr').onclick = () => confirm(`删除 ${it.host} 的反代规则？`) && run(async () => { await api('rules/' + encodeURIComponent(it.host), { method: 'DELETE' }); toast('规则已删除', true); load(); });
+  if (q('.dd')) q('.dd').onclick = () => confirm(`从 Pages 解绑 ${it.host}？解绑后这个域名将无法访问。`) && run(async () => { await api('domains/' + encodeURIComponent(it.host), { method: 'DELETE' }); toast('已解绑', true); load(); });
+  if (q('.bd')) q('.bd').onclick = () => run(async () => { await api('domains', { method: 'POST', body: JSON.stringify({ name: it.host }) }); toast('已提交绑定，请确认 DNS 已加 CNAME', true); load(); });
+  return tr;
+}
+async function run(fn) { try { await fn(); } catch (e) { toast(e.message, false); } }
+async function load() {
+  try {
+    ME = await api('me');
+    $('who').textContent = `${ME.email} · 项目 ${ME.project || '未设置 PAGES_PROJECT'}${ME.cfApi ? '' : ' · 未配置 Cloudflare API（域名需在面板手动绑定）'}`;
+    $('hint').innerHTML = ME.cname ? `添加后，到域名所在账号的 DNS 加一条 <code>CNAME 接入域名 → ${esc(ME.cname)}</code>（橙色云朵开着即可）。` : '';
+    const d = await api('overview');
+    const tb = $('list'); tb.innerHTML = '';
+    if (!d.items.length) tb.innerHTML = '<tr><td colspan="6" class="mut">还没有接入的域名</td></tr>';
+    d.items.forEach((it) => tb.appendChild(row(it)));
+  } catch (e) { $('who').textContent = e.message; $('list').innerHTML = `<tr><td colspan="6" class="mut">${esc(e.message)}</td></tr>`; }
+}
+$('add').onclick = () => run(async () => {
+  const host = $('nh').value.trim().toLowerCase(), target = $('nt').value.trim();
+  if (!host || !target) throw new Error('请填域名和目标地址');
+  await api('rules/' + encodeURIComponent(host), { method: 'PUT', body: JSON.stringify({ target, enabled: true }) });
+  if (ME.cfApi) { try { await api('domains', { method: 'POST', body: JSON.stringify({ name: host }) }); } catch (e) { if (!/already/i.test(e.message)) throw new Error('规则已保存，但绑定 Pages 失败：' + e.message); } }
+  $('nh').value = ''; $('nt').value = ''; toast('已添加', true); load();
+});
+$('reload').onclick = load;
+load();
+</script>
+</body>
+</html>
