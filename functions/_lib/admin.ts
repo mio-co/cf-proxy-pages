@@ -12,6 +12,12 @@ export async function handleAdmin(req: Request, env: Env, isAdminHost: (h: strin
   let email: string;
   try { email = await verifyAccess(req, env); } catch (e: any) { return json({ error: e.message }, 401); }
   if (!env.RULES) return json({ error: '未绑定 KV（变量名 RULES）' }, 500);
+  // 防 CSRF：Access 会给带登录 Cookie 的任何请求注入 JWT，所以写操作还要求同源 + JSON
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    const origin = req.headers.get('origin');
+    if (origin && origin !== new URL(req.url).origin) return json({ error: '跨站请求被拒绝' }, 403);
+    if (!(req.headers.get('content-type') || '').toLowerCase().startsWith('application/json')) return json({ error: '请求格式应为 JSON' }, 415);
+  }
 
   const url = new URL(req.url);
   const parts = url.pathname.replace(/^\/api\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);

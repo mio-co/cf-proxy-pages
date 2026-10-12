@@ -38,6 +38,8 @@
 5. **接入域名**：后台填「接入域名 + 目标 Worker」→ 添加（会自动加进 Pages 自定义域名）→ 到域名所在账号的 DNS 加 `CNAME 接入域名 → <项目名>.pages.dev`（可开橙色云朵）→ 等状态变 active。
 
 ## 注意
+- **根域名（如 `a.com`）只能接入和本 Pages 同一账号里的 zone**；别的账号只能接子域名（`www.a.com`、`api.a.com`），用 CNAME 接入。这是 Cloudflare Pages 的限制。
+- 域名所在 zone 如果有 CAA 记录，需要放行 Cloudflare 用的证书机构，否则证书签不出来。
 - 免费版每个 Pages 项目最多 100 个自定义域名。
 - 每次请求会同时计入本账号 Pages Functions 和目标账号 Worker 的请求额度。
 - 目标 Worker 看到的 Host 是它自己的域名；原始域名在 `X-Forwarded-Host`。
