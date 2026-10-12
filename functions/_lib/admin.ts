@@ -6,6 +6,8 @@ import { cfConfigured, listDomains, addDomain, removeDomain } from './cfapi';
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
+// CNAME 目标取当前访问的 pages.dev 地址（项目名重名时子域会带随机后缀，如 cf-proxy-924，不能用项目名拼）
+const pagesHost = (h: string) => (h.endsWith('.pages.dev') ? h.split('.').slice(-3).join('.') : null);
 const HOST_RE = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 
 export async function handleAdmin(req: Request, env: Env, isAdminHost: (h: string) => boolean): Promise<Response> {
@@ -24,7 +26,7 @@ export async function handleAdmin(req: Request, env: Env, isAdminHost: (h: strin
   const [res, id] = parts;
   try {
     if (res === 'me' && req.method === 'GET') {
-      return json({ email, project: env.PAGES_PROJECT || null, cname: env.PAGES_PROJECT ? `${env.PAGES_PROJECT}.pages.dev` : null, cfApi: cfConfigured(env) });
+      return json({ email, project: env.PAGES_PROJECT || null, cname: pagesHost(url.hostname), cfApi: cfConfigured(env) });
     }
 
     // 总览：Pages 已绑域名 + 规则，合并成一张表

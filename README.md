@@ -35,7 +35,7 @@
    `CF_*` 三项不填也能用，只是后台不显示绑定状态，域名要去面板手动加。改完变量要重新部署一次。
 4. **Access**：Zero Trust → Access → 应用程序 → 添加 → 自托管，域名填 `<项目名>.pages.dev`，再加一条 `*.<项目名>.pages.dev`（预览地址）。策略按需（如只允许你的邮箱）。复制 AUD 填到第 3 步。
    **只保护 pages.dev 地址，不要把接入域名加进 Access**，否则访客会被拦。没配好 Access 变量时，后台接口一律拒绝。
-5. **接入域名**：后台填「接入域名 + 目标 Worker」→ 添加（会自动加进 Pages 自定义域名）→ 到域名所在账号的 DNS 加 `CNAME 接入域名 → <项目名>.pages.dev`（可开橙色云朵）→ 等状态变 active。
+5. **接入域名**：后台填「接入域名 + 目标 Worker」→ 添加（会自动加进 Pages 自定义域名）→ 到域名所在账号的 DNS 加 `CNAME 接入域名 → 本项目的 pages.dev 地址`（以 Pages 面板显示的为准，重名时会带随机后缀，如 `cf-proxy-924.pages.dev`）→ 等状态变 active。
 
 ## 注意
 - **根域名（如 `a.com`）只能接入和本 Pages 同一账号里的 zone**；别的账号只能接子域名（`www.a.com`、`api.a.com`），用 CNAME 接入。这是 Cloudflare Pages 的限制。
